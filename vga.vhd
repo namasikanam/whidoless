@@ -8,9 +8,9 @@ entity vga is
 		reset: in std_logic;
 		
 		vga_needed_sram_addr: out std_logic_vector(19 downto 0); -- 地址
-		vga_current_3: out integer range 0 to 2;
+		vga_current_3: buffer integer range 0 to 2;
 		
-		vga_x, vga_y: out integer;
+		x, y: buffer integer;
 		
 		r_in, g_in, b_in: in std_logic_vector(2 downto 0);
 		r_out, g_out, b_out: out std_logic_vector(2 downto 0);
@@ -35,35 +35,33 @@ architecture vga of vga is
 	constant vertical_back_porch: integer:= 33;
 	constant vertical_whole_line: integer:= 525;
 	
-	signal hst, vst: std_logic;
 	signal clk: std_logic;
 	
 	signal addr: integer;
-	
-	signal x, y: integer;
 begin
-	-- 瞎搞
-	-- 诶，你在这里搞什么？
-	vga_x <= x;
-	vga_y <= y;
-
 	clk <= clk25; -- 时钟信号
 	
 	-- 地址	
 	addr <= y * horizontal_whole_address + x / 3;
 	vga_needed_sram_addr <= conv_std_logic_vector(addr, vga_needed_sram_addr'length);
-	vga_current_3 <= x mod 3;
 
 	-----------------------------------------------------------------------
 	process(clk, reset)	--琛屽尯闂村儚绱犳暟锛堝惈娑堥殣鍖猴級
 	begin
 		if reset = '0' then
 			x <= 0;
+			vga_current_3 <= 0;
 		elsif clk'event and clk = '1' then
 			if x = horizontal_whole_line - 1 then
 				x <= 0;
+				vga_current_3 <= 0;
 			else
 				x <= x + 1;
+				case vga_current_3 is
+					when 0 => vga_current_3 <= 1;
+					when 1 => vga_current_3 <= 2;
+					when 2 => vga_current_3 <= 0;
+				end case;
 			end if;
 		end if;
 	end process;
@@ -85,41 +83,25 @@ begin
 	process(clk, reset)	--琛屽悓姝ヤ俊鍙蜂骇鐢
 	begin
 		if reset = '0' then
-			hst <= '1';
+			hs <= '0';
 		elsif clk'event and clk = '1' then
 			if x >= horizontal_visible_area + horizontal_front_porch and x < horizontal_whole_line - horizontal_back_porch then
-				hst <= '0';
+				hs <= '0';
 			else
-				hst <= '1';
+				hs <= '1';
 		   end if;
 		end if;
 	end process;
 	process(clk, reset)	--鍦哄悓姝ヤ俊鍙蜂骇鐢
 	begin
 	  	if reset = '0' then
-	  		vst <= '1';
+	  		vs <= '0';
 	  	elsif clk'event and clk = '1' then
 	  		if y >= vertical_visible_area + vertical_front_porch and y < vertical_whole_line - vertical_back_porch then
-	    		vst <= '0';
+	    		vs <= '0';
 	  		else
-	   		vst <= '1';
+	   		vs <= '1';
 	  		end if;
-	  	end if;
-	end process;
-	process(clk, reset)	--琛屽悓姝ヤ俊鍙疯緭鍑
-	begin
-	  	if reset = '0' then
-	  		hs <= '0';
-	  	elsif clk'event and clk = '1' then
-	  		hs <=  hst;
-	  	end if;
-	end process;
-	process(clk, reset)	--鍦哄悓姝ヤ俊鍙疯緭鍑
-	begin
-	  	if reset = '0' then
-	  		vs <= '0';
-	  	elsif clk'event and clk='1' then
-	  		vs <=  vst;
 	  	end if;
 	end process;
 

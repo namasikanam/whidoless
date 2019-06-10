@@ -64,9 +64,9 @@ architecture whidoless of whidoless is
 			reset: in std_logic;
 			
 			vga_needed_sram_addr: out std_logic_vector(19 downto 0); -- 地址
-			vga_current_3: out integer range 0 to 2;
+			vga_current_3: buffer integer range 0 to 2;
 			
-			vga_x, vga_y: out integer;
+			x, y: out integer;
 			
 			r_in, g_in, b_in: in std_logic_vector(2 downto 0);
 			r_out, g_out, b_out: out std_logic_vector(2 downto 0);
@@ -99,7 +99,6 @@ architecture whidoless of whidoless is
 	signal sd_done: std_logic; -- 已经从sd卡里读出数据了
 	signal sd_data: std_logic_vector(4095 downto 0);
 	
-	signal current_img_id: std_logic_vector(9 downto 0); -- 当前已经读好的img_id
 	signal wanted_img_id: std_logic_vector(9 downto 0); -- 想读的img_id
 	signal block_id: std_logic_vector(9 downto 0);
 	signal sd_data_subscript: integer range 0 to 4000; -- 把sd卡数据的什么位置写进SRAM呢？
@@ -169,7 +168,7 @@ begin
 	instance_of_vga: vga port map(
 		reset => reset,
 		vga_needed_sram_addr => vga_needed_sram_addr, vga_current_3 => vga_current_3,
-		vga_x => vga_x, vga_y => vga_y,
+		x => vga_x, y => vga_y,
 		r_in => r_in, g_in => g_in, b_in => b_in,
 		r_out => r_out, g_out => g_out, b_out => b_out,
 		clk25 => clk25,
@@ -241,7 +240,7 @@ begin
 	process(reset, zs, clk, sd_done) -- 这里是滚轮触发换PPT。
 		-- 处理的信号包括：
 			-- 状态机：sd_state
-			-- 是第几张图呢：wanted_img_id, current_img_id
+			-- 是第几张图呢：wanted_img_id
 			-- 是第几块呢：block_id
 			-- 控制SD卡：sd_r
 			-- 控制SRAM: sram_w
@@ -253,7 +252,6 @@ begin
 			
 			-- 切到state1，开始读图
 			sd_state <= 1;
-			current_img_id <= (others => '1');
 			wanted_img_id <= (others => '0');
 			
 			block_id <= (others => '0');
@@ -355,14 +353,14 @@ begin
 					ram_cs <= '0';
 					
 					ram_addr <= vga_needed_sram_addr;
+					ram_data <= (others => 'Z');
 					
 					state <= "0001";
 				when "0001" =>
-					ram_data <= (others => 'Z');
+					vga_data <= ram_data;
 					
 					state <= "0010";
 				when "0010" =>
-					vga_data <= ram_data;
 					
 					state <= "0011";
 				when "0011" => -- 在接下来的这个时钟周期里，第1个VGA像素应该被读出。
@@ -372,6 +370,11 @@ begin
 					if sram_w = '1' then
 						ram_addr <= sram_addr;
 						ram_data <= current_sd_data;
+--						if vga_x mod 24 = 0 then
+--							ram_data <= "0000" & "1110000" & "0" & "00" & "000111000" & "000000111";
+--						else
+--							ram_data <= (others => '0');
+--						end if;
 					elsif lrm(0) = '1' then
 						if vga_x2 < W and vga_y2 < H and (vga_x2 - mouse_x) * (vga_x2 - mouse_x) + (vga_y2 - mouse_y) * (vga_y2 - mouse_y) <= R * R then
 							paint_data2 <= color_data;
@@ -395,10 +398,10 @@ begin
 							write_flag0 <= '0';
 						end if;
 						
-						if write_flag0 = '1' or write_flag1 = '1' or write_flag2 = '1' then
+						if (write_flag0 = '1' or write_flag1 = '1' or write_flag2 = '1') and vga_needed_sram_addr >= 2 then
 							mouse_w <= '1';
 							
-							ram_addr <= vga_needed_sram_addr;
+							ram_addr <= vga_needed_sram_addr - 2;
 							ram_data <= "0000" & paint_data2(8 downto 2) & "0" & paint_data2(1 downto 0) & paint_data1 & paint_data0; -- 存入SRAM时跳过第20位。
 						end if;
 					end if;
