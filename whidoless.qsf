@@ -132,15 +132,17 @@ set_location_assignment PIN_V4 -to SD_DI
 set_location_assignment PIN_W2 -to SD_DOUT
 set_location_assignment PIN_V2 -to SD_NCS
 set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -entity fake_powerpoint -section_id Top
-set_global_assignment -name VHDL_FILE ../fake_powerpoint/vga.vhd
-set_global_assignment -name VERILOG_FILE ../fake_powerpoint/sdcard_top.v
-set_global_assignment -name VHDL_FILE ../fake_powerpoint/sd_spi.vhd
-set_global_assignment -name VERILOG_FILE ../fake_powerpoint/ps2_top.v
-set_global_assignment -name VERILOG_FILE ../fake_powerpoint/ps2_read_funcmod.v
-set_global_assignment -name VERILOG_FILE ../fake_powerpoint/ps2_interface.v
-set_global_assignment -name VERILOG_FILE ../fake_powerpoint/ps2_init_funcmod.v
-set_global_assignment -name VHDL_FILE ../fake_powerpoint/fake_powerpoint.vhd
-set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top
 set_global_assignment -name PARTITION_NETLIST_TYPE SOURCE -section_id Top
 set_global_assignment -name PARTITION_FITTER_PRESERVATION_LEVEL PLACEMENT_AND_ROUTING -section_id Top
 set_global_assignment -name PARTITION_COLOR 16764057 -section_id Top
+set_global_assignment -name VHDL_FILE whidoless.vhd
+set_global_assignment -name VHDL_FILE vga.vhd
+set_global_assignment -name VERILOG_FILE sdcard_top.v
+set_global_assignment -name VHDL_FILE sd_spi.vhd
+set_global_assignment -name VERILOG_FILE ps2_top.v
+set_global_assignment -name VERILOG_FILE ps2_read_funcmod.v
+set_global_assignment -name VERILOG_FILE ps2_interface.v
+set_global_assignment -name VERILOG_FILE ps2_init_funcmod.v
+set_global_assignment -name STRATIX_DEVICE_IO_STANDARD "3.3-V LVTTL"
+set_location_assignment PIN_AB21 -to ram_cs
+set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top

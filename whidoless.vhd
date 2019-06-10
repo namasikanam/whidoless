@@ -12,6 +12,7 @@ entity whidoless is
 		ram_data: inout std_logic_vector(31 downto 0); -- 数据线
 		ram_addr: out std_logic_vector(19 downto 0); -- 地址线
 		ram_rw: out std_logic_vector(1 downto 0);
+		ram_cs: out std_logic;
 		
 		-- VGA
 		r_out, g_out, b_out: out std_logic_vector(2 downto 0);
@@ -28,13 +29,14 @@ entity whidoless is
 end entity;
 
 architecture whidoless of whidoless is
-	-- 显示屏的分辨率。
-	-- 把涂鸦的分辨率降为 1024 / 4 * 768 / 3 = 256 * 256。
 	constant W: integer:= 640;
 	constant H: integer:= 480;
 	constant R: integer:= 3; -- 涂鸦球的大小。
 	constant NUMBER_OF_IMG: integer:= 20;
-	constant NUMBER_OF_BLOCK: integer:= 600;
+	constant NUMBER_OF_BLOCK: integer:= 856;
+	constant MAX_VALID_SD_SUBSCRIPT: integer:= 3213;
+	constant LENGTH_OF_SD_WORD: integer:= 27;
+	constant W_WHOLE: integer:= 800;
 	
 	signal clk50, clk25: std_logic;
 
@@ -61,9 +63,8 @@ architecture whidoless of whidoless is
 		port(
 			reset: in std_logic;
 			
-			addr_i: out std_logic_vector(19 downto 0); -- 地址
-			addr_j: out std_logic_vector(1 downto 0);
-			enable: out std_logic; -- '1'表示在消隐区，'0'表示不在。
+			vga_needed_sram_addr: out std_logic_vector(19 downto 0); -- 地址
+			vga_current_3: out integer range 0 to 2;
 			
 			vga_x, vga_y: out integer;
 			
@@ -77,14 +78,14 @@ architecture whidoless of whidoless is
 	signal enable: std_logic;
 	signal addr: integer;
 	signal vga_x, vga_y: integer;
+	signal vga_x0, vga_y0, vga_x1, vga_y1, vga_x2, vga_y2: integer;
 	signal r_in, g_in, b_in: std_logic_vector(2 downto 0);
 	
 	-- SD Card
 	component sdcard_top
 		port(
 			CLOCK_50, RESET: in std_logic;
-			SD_NCS: out std_logic;
-			SD_CLK: out std_logic;
+			SD_NCS, SD_CLK: out std_logic;
 			SD_DOUT: in std_logic;
 			SD_DI: out std_logic;
 			img_id: in std_logic_vector(9 downto 0);
@@ -101,7 +102,7 @@ architecture whidoless of whidoless is
 	signal current_img_id: std_logic_vector(9 downto 0); -- 当前已经读好的img_id
 	signal wanted_img_id: std_logic_vector(9 downto 0); -- 想读的img_id
 	signal block_id: std_logic_vector(9 downto 0);
-	signal sd_data_subscript: integer range 0 to 4095; -- 把sd卡数据的什么位置写进SRAM呢？
+	signal sd_data_subscript: integer range 0 to 4000; -- 把sd卡数据的什么位置写进SRAM呢？
 	signal current_sd_data: std_logic_vector(31 downto 0);
 	signal sram_addr: std_logic_vector(19 downto 0); -- 把sd卡的数据写进SRAM的什么位置呢？
 	
@@ -113,17 +114,18 @@ architecture whidoless of whidoless is
 	signal state: std_logic_vector(3 downto 0);
 	signal mouse_w: std_logic;
 	
-	signal addr_i: std_logic_vector(19 downto 0);
-	signal addr_j: std_logic_vector(1 downto 0);
+	signal vga_needed_sram_addr: std_logic_vector(19 downto 0);
+	signal vga_current_3: integer range 0 to 2;
 	signal vga_data: std_logic_vector(31 downto 0); -- r_in, g_in和b_in来自的地址
 	
-	signal paint_data0, paint_data1, paint_data2, paint_data3: std_logic_vector(7 downto 0);
-	signal write_flag0, write_flag1, write_flag2, write_flag3: std_logic;
+	signal paint_data0, paint_data1, paint_data2: std_logic_vector(8 downto 0);
+	signal write_flag0, write_flag1, write_flag2: std_logic;
 	
 	-- 颜色
 	signal right_click: std_logic;
-	signal color: integer range 0 to 4; -- 涂鸦的颜色，0表示红，1表示绿，2表示蓝，3表示黑，4表示白。
-	signal color_data: std_logic_vector(7 downto 0);
+	type ENUM_COLOR is (Red, Green, Blue, Black, White);
+	signal color: ENUM_COLOR;
+	signal color_data: std_logic_vector(8 downto 0);
 	
 	-- type type_canvas is array (255 downto 0) of std_logic_vector(255 downto 0);
 	-- signal canvas: type_canvas:= (others => (others => '0'));
@@ -141,73 +143,91 @@ begin
 	process(reset, right_click)
 	begin
 		if reset = '0' then
-			color <= 0;
+			color <= Red;
 		elsif right_click'event and right_click = '1' then
 			case color is
-				when 0 => color <= 1;
-				when 1 => color <= 2;
-				when 2 => color <= 3;
-				when 3 => color <= 4;
-				when 4 => color <= 0;
+				when Red => color <= Green;
+				when Green => color <= Blue;
+				when Blue => color <= White;
+				when White => color <= Black;
+				when Black => color <= Red;
 			end case;
 		end if;
 	end process;
 	process(color)
 	begin
 		case color is
-			when 0 =>
-				color_data <= "11000000";
-			when 1 =>
-				color_data <= "00011100";
-			when 2 =>
-				color_data <= "00000011";
-			when 3 =>
-				color_data <= "00000000";
-			when 4 =>
-				color_data <= "11011111";
+			when Red => color_data <= "111000000";
+			when Green => color_data <= "000111000";
+			when Blue => color_data <= "000000111";
+			when White => color_data <= "000000000";
+			when Black => color_data <= "111111111";
 		end case;
 	end process;
 	
 	-- 搞搞屏幕
 	instance_of_vga: vga port map(
 		reset => reset,
-		addr_i => addr_i, addr_j => addr_j,
-		enable => enable,
+		vga_needed_sram_addr => vga_needed_sram_addr, vga_current_3 => vga_current_3,
 		vga_x => vga_x, vga_y => vga_y,
 		r_in => r_in, g_in => g_in, b_in => b_in,
 		r_out => r_out, g_out => g_out, b_out => b_out,
 		clk25 => clk25,
 		hs => hs, vs => vs
 	);
-	process(mouse_x, mouse_y, vga_x, vga_y, addr_j) -- 在屏幕中搞出鼠标
+	process(mouse_x, mouse_y, vga_x, vga_y, vga_data, color_data, vga_current_3) -- 在屏幕中搞出鼠标
 	begin
-		if (vga_x - mouse_x) * (vga_x - mouse_x) + (vga_y - mouse_y) * (vga_y - mouse_y) <= R * R then -- 目前是5 * 5 ，挺大的，以后肯定还会再改的……
-			r_in <= color_data(7 downto 5);
-			g_in <= color_data(4 downto 2);
-			b_in <= color_data(1 downto 0) & "0";
+		if (vga_x - mouse_x) * (vga_x - mouse_x) + (vga_y - mouse_y) * (vga_y - mouse_y) <= R * R then
+			r_in <= color_data(8 downto 6);
+			g_in <= color_data(5 downto 3);
+			b_in <= color_data(2 downto 0);
 		else
---			r_in <= "111";
---			g_in <= "000";
---			b_in <= "000";
-			
-			case addr_j is
-				when "11" =>
-					r_in <= vga_data(31 downto 29);
-					g_in <= vga_data(28 downto 26);
-					b_in <= vga_data(25 downto 24) & "0";
-				when "10" =>
-					r_in <= vga_data(23 downto 22) & "0";
-					g_in <= vga_data(21 downto 21) & vga_data(19 downto 18);
-					b_in <= vga_data(17 downto 16) & "0";
-				when "01" =>
-					r_in <= vga_data(15 downto 13);
-					g_in <= vga_data(12 downto 10);
-					b_in <= vga_data(9 downto 8) & "0";
-				when "00" =>
-					r_in <= vga_data(7 downto 5);
-					g_in <= vga_data(4 downto 2);
-					b_in <= vga_data(1 downto 0) & "0";
+			case vga_current_3 is
+				when 2 =>
+					r_in <= vga_data(27 downto 25);
+					g_in <= vga_data(24 downto 22);
+					b_in <= vga_data(21 downto 21) & vga_data(19 downto 18);
+--					r_in <= vga_data(17 downto 15);
+--					g_in <= vga_data(14 downto 12);
+--					b_in <= vga_data(11 downto 9);
+--					r_in <= vga_data(8 downto 6);
+--					g_in <= vga_data(5 downto 3);
+--					b_in <= vga_data(2 downto 0);
+				when 1 =>
+					r_in <= vga_data(17 downto 15);
+					g_in <= vga_data(14 downto 12);
+					b_in <= vga_data(11 downto 9);
+--					r_in <= vga_data(8 downto 6);
+--					g_in <= vga_data(5 downto 3);
+--					b_in <= vga_data(2 downto 0);
+				when 0 =>
+--					r_in <= vga_data(17 downto 15);
+--					g_in <= vga_data(14 downto 12);
+--					b_in <= vga_data(11 downto 9);
+					r_in <= vga_data(8 downto 6);
+					g_in <= vga_data(5 downto 3);
+					b_in <= vga_data(2 downto 0);
 			end case;
+		end if;
+	end process;
+	process(reset, clk)
+	begin
+		if reset = '0' then
+			vga_x0 <= 0;
+			vga_y0 <= 0;
+			vga_x1 <= 1;
+			vga_y1 <= 0;
+			vga_x2 <= 2;
+			vga_y2 <= 0;
+		elsif clk'event and clk = '1' then
+			vga_x0 <= vga_x;
+			vga_y0 <= vga_y;
+			
+			vga_x1 <= vga_x0 + 1;
+			vga_y1 <= vga_y;
+			
+			vga_x2 <= vga_x0 + 2;
+			vga_y2 <= vga_y;
 		end if;
 	end process;
 	
@@ -241,7 +261,7 @@ begin
 		elsif clk'event and clk = '1' then
 			case sd_state is
 				when 0 => -- 0当然是咸鱼态啦~
-					if zs(0) = '1' then
+					if Trig = '1' and zs(0) = '1' then
 						if zs(1) = '1' then
 							if wanted_img_id /= "0000000000" then
 								sd_state <= 1;
@@ -277,16 +297,19 @@ begin
 				when 4 => -- 等待SRAM写好。
 					if sram_done = '1' then
 						sram_w <= '0';
+						
+						-- SRAM数据位+1
 						sram_addr <= sram_addr + 1;
 						
-						if sd_data_subscript /= 4064 then
-							sd_data_subscript <= sd_data_subscript + 32;
+						-- SD卡数据位+1
+						if sd_data_subscript /= MAX_VALID_SD_SUBSCRIPT then
+							sd_data_subscript <= sd_data_subscript + LENGTH_OF_SD_WORD;
 							
 							sd_state <= 3;
 						else
 							sd_data_subscript <= 0;
 							
-							if block_id /= NUMBER_OF_BLOCK then
+							if block_id /= NUMBER_OF_BLOCK - 1 then
 								block_id <= block_id + 1;
 								
 								sd_state <= 1;
@@ -298,7 +321,9 @@ begin
 			end case;
 		end if;
 	end process;
-	current_sd_data <= sd_data(sd_data_subscript + 31 downto sd_data_subscript + 22) & sd_data(sd_data_subscript + 20 downto sd_data_subscript + 20) & "1" & sd_data(sd_data_subscript + 19 downto sd_data_subscript);
+	
+	current_sd_data <= "0000" & sd_data(sd_data_subscript + 26 downto sd_data_subscript + 20) & "0" & sd_data(sd_data_subscript + 19 downto sd_data_subscript);-- 跳过第20位。
+	-- current_sd_data <= (others => '0');
 	
 	-- 这是一个总的时序状态机。
 	process(reset, clk)
@@ -312,6 +337,8 @@ begin
 			
 			mouse_w <= '0';
 			sram_done <= '0';
+			
+			ram_cs <= '1';
 		elsif clk'event and clk = '1' then
 			-- 分频
 			clk50 <= not clk50;
@@ -325,7 +352,9 @@ begin
 			case state is
 				when "0000" =>
 					ram_rw <= "01";
-					ram_addr <= addr_i;
+					ram_cs <= '0';
+					
+					ram_addr <= vga_needed_sram_addr;
 					
 					state <= "0001";
 				when "0001" =>
@@ -338,62 +367,50 @@ begin
 					state <= "0011";
 				when "0011" => -- 在接下来的这个时钟周期里，第1个VGA像素应该被读出。
 					ram_rw <= "11";
+					ram_cs <= '1';
 					
 					if sram_w = '1' then
 						ram_addr <= sram_addr;
 						ram_data <= current_sd_data;
-					elsif lrm(0) = '1' and enable = '1' then
-						if (vga_x - mouse_x + 3) * (vga_x - mouse_x + 3) + (vga_y - mouse_y) * (vga_y - mouse_y) <= R * R then
-							paint_data3 <= color_data;
-							write_flag3 <= '1';
-						else
-							paint_data3 <= vga_data(31 downto 24);
-							write_flag3 <= '0';
-						end if;
-						if (vga_x - mouse_x + 2) * (vga_x - mouse_x + 2) + (vga_y - mouse_y) * (vga_y - mouse_y) <= R * R then
-							if color = 1 then
-								paint_data2 <= "00101100";
-							elsif color = 4 then
-								paint_data2 <= "11101111";
-							else
-								paint_data2 <= color_data;
-							end if;
+					elsif lrm(0) = '1' then
+						if vga_x2 < W and vga_y2 < H and (vga_x2 - mouse_x) * (vga_x2 - mouse_x) + (vga_y2 - mouse_y) * (vga_y2 - mouse_y) <= R * R then
+							paint_data2 <= color_data;
 							write_flag2 <= '1';
 						else
-							paint_data2 <= vga_data(23 downto 16);
+							paint_data2 <= vga_data(27 downto 21) & vga_data(19 downto 18);
 							write_flag2 <= '0';
 						end if;
-						if (vga_x - mouse_x + 1) * (vga_x - mouse_x + 1) + (vga_y - mouse_y) * (vga_y - mouse_y) <= R * R then
+						if vga_x1 < W and vga_y1 < H and (vga_x1 - mouse_x) * (vga_x1 - mouse_x) + (vga_y1 - mouse_y) * (vga_y1 - mouse_y) <= R * R then
 							paint_data1 <= color_data;
 							write_flag1 <= '1';
 						else
-							paint_data1 <= vga_data(15 downto 8);
+							paint_data1 <= vga_data(17 downto 9);
 							write_flag1 <= '0';
 						end if;
-						if (vga_x - mouse_x) * (vga_x - mouse_x) + (vga_y - mouse_y) * (vga_y - mouse_y) <= R * R then
+						if vga_x0 < W and vga_y0 < H and (vga_x0 - mouse_x) * (vga_x0 - mouse_x) + (vga_y0 - mouse_y) * (vga_y0 - mouse_y) <= R * R then
 							paint_data0 <= color_data;
 							write_flag0 <= '1';
 						else
-							paint_data0 <= vga_data(7 downto 0);
+							paint_data0 <= vga_data(8 downto 0);
 							write_flag0 <= '0';
 						end if;
 						
-						if write_flag0 = '1' or write_flag1 = '1' or write_flag2 = '1' or write_flag3 = '1' then
+						if write_flag0 = '1' or write_flag1 = '1' or write_flag2 = '1' then
 							mouse_w <= '1';
 							
-							ram_addr <= addr_i;
-							ram_data <= paint_data3 & paint_data2 & paint_data1 & paint_data0;
+							ram_addr <= vga_needed_sram_addr;
+							ram_data <= "0000" & paint_data2(8 downto 2) & "0" & paint_data2(1 downto 0) & paint_data1 & paint_data0; -- 存入SRAM时跳过第20位。
 						end if;
 					end if;
 					
 					state <= "0100";
 				when "0100" =>
-					if mouse_w = '1' or sram_w = '1' then
-						ram_rw <= "10";
-					end if;
-					
 					state <= "0101";
 				when "0101" =>
+					if mouse_w = '1' or sram_w = '1' then
+						ram_rw <= "10";
+						ram_cs <= '0';
+					end if;
 					state <= "0110";
 				when "0110" =>
 					state <= "0111";
@@ -402,30 +419,23 @@ begin
 				when "1000" =>
 					state <= "1001";
 				when "1001" =>
-					state <= "1010";
-				when "1010" =>
-					state <= "1011";
-				when "1011" =>
-					state <= "1100";
-				when "1100" =>
-					state <= "1101";
-				when "1101" =>
 					if mouse_w = '1' or sram_w = '1' then
 						ram_rw <= "11";
+						ram_cs <= '1';
 					end if;
+					state <= "1010";
+				when "1010" =>
 					if sram_w = '1' then
 						sram_done <= '1';
 					end if;
-					
-					state <= "1110";
-				when "1110" =>
-					state <= "1111";
-				when "1111" =>
+					state <= "1011";
+				when "1011" =>
 					sram_done <= '0';
 					
 					mouse_w <= '0'; -- 在每个状态机周期(160ns)末尾清零
-				
+					
 					state <= "0000";
+				when others => null;
 			end case;
 		end if;
 	end process;

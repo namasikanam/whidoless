@@ -27,7 +27,7 @@ module sdcard_top
 	 wire [7:0]sd_fsm;
 	 
 	 always @(*) begin
-	     addr = 32'd24832 + img_id * 32'd600 + block_id; // 据田哥说这里每次都要改。
+	     addr = 32'd24832 + img_id * 32'd856 + block_id;
     end
 	 
 	 reg [9:0]count;

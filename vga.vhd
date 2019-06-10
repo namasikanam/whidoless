@@ -7,9 +7,8 @@ entity vga is
 	port(
 		reset: in std_logic;
 		
-		addr_i: out std_logic_vector(19 downto 0); -- 地址
-		addr_j: out std_logic_vector(1 downto 0);
-		enable: out std_logic; -- '1'表示在消隐区，'0'表示不在。
+		vga_needed_sram_addr: out std_logic_vector(19 downto 0); -- 地址
+		vga_current_3: out integer range 0 to 2;
 		
 		vga_x, vga_y: out integer;
 		
@@ -28,6 +27,7 @@ architecture vga of vga is
 	constant horizontal_sync_pulse: integer:= 96;
 	constant horizontal_back_porch: integer:= 48;
 	constant horizontal_whole_line: integer:= 800;
+	constant horizontal_whole_address: integer:= 639/3 + 1;
 	
 	constant vertical_visible_area: integer:= 480;
 	constant vertical_front_porch: integer:= 10;
@@ -38,19 +38,21 @@ architecture vga of vga is
 	signal hst, vst: std_logic;
 	signal clk: std_logic;
 	
-	signal addr: std_logic_vector(21 downto 0);
+	signal addr: integer;
 	
 	signal x, y: integer;
 begin
 	-- 瞎搞
+	-- 诶，你在这里搞什么？
 	vga_x <= x;
 	vga_y <= y;
 
 	clk <= clk25; -- 时钟信号
 	
 	-- 地址	
-	addr_i <= addr(21 downto 2);
-	addr_j <= addr(1 downto 0);
+	addr <= y * horizontal_whole_address + x / 3;
+	vga_needed_sram_addr <= conv_std_logic_vector(addr, vga_needed_sram_addr'length);
+	vga_current_3 <= x mod 3;
 
 	-----------------------------------------------------------------------
 	process(clk, reset)	--琛屽尯闂村儚绱犳暟锛堝惈娑堥殣鍖猴級
@@ -127,16 +129,10 @@ begin
 			r_out <= r_in;
 			g_out <= g_in;
 			b_out <= b_in;
-			
-			addr <= conv_std_logic_vector(y * horizontal_visible_area + x, addr'length);
-			enable <= '1';
 		else
 			r_out <= (others => '0');
 			g_out <= (others => '0');
 			b_out <= (others => '0');
-			
-			addr <= (others => '0');
-			enable <= '0';
 		end if;
 	end process;
 end architecture;
