@@ -32,7 +32,7 @@ architecture whidoless of whidoless is
 	constant W: integer:= 640;
 	constant H: integer:= 480;
 	constant R: integer:= 3; -- 涂鸦球的大小。
-	constant NUMBER_OF_IMG: integer:= 20;
+	constant NUMBER_OF_IMG: integer:= 1024;
 	constant NUMBER_OF_BLOCK: integer:= 856;
 	constant MAX_VALID_SD_SUBSCRIPT: integer:= 3213;
 	constant LENGTH_OF_SD_WORD: integer:= 27;

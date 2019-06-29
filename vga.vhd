@@ -54,15 +54,14 @@ begin
 		elsif clk'event and clk = '1' then
 			if x = horizontal_whole_line - 1 then
 				x <= 0;
-				vga_current_3 <= 0;
 			else
 				x <= x + 1;
-				case vga_current_3 is
-					when 0 => vga_current_3 <= 1;
-					when 1 => vga_current_3 <= 2;
-					when 2 => vga_current_3 <= 0;
-				end case;
 			end if;
+			case vga_current_3 is
+				when 0 => vga_current_3 <= 1;
+				when 1 => vga_current_3 <= 2;
+				when 2 => vga_current_3 <= 0;
+			end case;
 		end if;
 	end process;
 	process(clk, reset)	--鍦哄尯闂磋鏁帮紙鍚秷闅愬尯锛

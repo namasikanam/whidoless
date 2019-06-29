@@ -135,14 +135,16 @@ set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -entity f
 set_global_assignment -name PARTITION_NETLIST_TYPE SOURCE -section_id Top
 set_global_assignment -name PARTITION_FITTER_PRESERVATION_LEVEL PLACEMENT_AND_ROUTING -section_id Top
 set_global_assignment -name PARTITION_COLOR 16764057 -section_id Top
+set_global_assignment -name STRATIX_DEVICE_IO_STANDARD "3.3-V LVTTL"
+set_location_assignment PIN_AB21 -to ram_cs
+set_global_assignment -name VERILOG_FILE vga_funcmod.v
+set_global_assignment -name VERILOG_FILE vga_ctrlmod.v
+set_global_assignment -name VERILOG_FILE vga_basemod.v
 set_global_assignment -name VHDL_FILE whidoless.vhd
-set_global_assignment -name VHDL_FILE vga.vhd
 set_global_assignment -name VERILOG_FILE sdcard_top.v
 set_global_assignment -name VHDL_FILE sd_spi.vhd
 set_global_assignment -name VERILOG_FILE ps2_top.v
 set_global_assignment -name VERILOG_FILE ps2_read_funcmod.v
 set_global_assignment -name VERILOG_FILE ps2_interface.v
 set_global_assignment -name VERILOG_FILE ps2_init_funcmod.v
-set_global_assignment -name STRATIX_DEVICE_IO_STANDARD "3.3-V LVTTL"
-set_location_assignment PIN_AB21 -to ram_cs
 set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top
