@@ -1,10 +1,13 @@
+// PS2扩展鼠标读取驱动
+//
+
 module ps2_read_funcmod
 (
-    input CLOCK, RESET,
-	 input PS2_CLK,PS2_DAT,
-	 input [1:0]iEn,
-	 output oTrig,
-	 output [31:0]oData
+    input CLOCK, RESET, // 时钟，RESET
+	 input PS2_CLK,PS2_DAT, // PS2时钟，PS2数据
+	 input [1:0]iEn, // 使能
+	 output oTrig, // 触发器
+	 output [31:0]oData // 数据
 );  
 	 parameter FF_Read = 7'd32;
 

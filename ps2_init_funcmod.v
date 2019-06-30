@@ -1,9 +1,12 @@
+// PS2扩展鼠标初始化驱动
+//
+
 module ps2_init_funcmod
 (
-    input CLOCK, RESET,
-	 inout PS2_CLK, 
-	 inout PS2_DAT,
-	 output [1:0]oEn
+    input CLOCK, RESET, // 时钟，RESET
+	 inout PS2_CLK, // PS2时钟
+	 inout PS2_DAT, // PS2数据
+	 output [1:0]oEn // 使能
 );  
     parameter T100US = 13'd5000;
 	 parameter FF_Write = 7'd32;

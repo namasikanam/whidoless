@@ -1,12 +1,17 @@
+// PS2扩展鼠标高层驱动
+//
+// 直接显示鼠标坐标和状态
+//
+
 module ps2_top
 (
-    input CLOCK, RESET,
-	 inout PS2_CLK, PS2_DAT,
-	 output [2:0]lrm,
-	 output reg[10:0]xs,
-	 output reg[10:0]ys,
-	 output [1:0]zs, // zs[1]表示方向，zs[0]表示动('1')还是没动('0')。
-	 output Trig
+    input CLOCK, RESET, // 时钟，RESET
+	 inout PS2_CLK, PS2_DAT, // PS2时钟，PS2数据
+	 output [2:0]lrm, // 左键右键中建状态
+	 output reg[10:0]xs, // X轴坐标
+	 output reg[10:0]ys, // Y轴坐标
+	 output [1:0]zs, // Z轴偏移
+	 output Trig // 事件触发器
 );
 
     parameter XMAX = 11'd639;

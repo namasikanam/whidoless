@@ -1,17 +1,22 @@
+// PS2扩展鼠标底层驱动
+//
+// 当鼠标触发事件时返回鼠标状态
+//
+
 module ps2_interface
 (
-    input CLOCK, RESET,
-	 inout PS2_CLK, PS2_DAT,
-	 output L,
-	 output R,
-	 output M,
-	 output Xd,
-	 output Yd,
-	 output Zd,
-	 output Trig,
-	 output [7:0]X,
-	 output [7:0]Y,
-	 output Z
+    input CLOCK, RESET, // 时钟，RESET
+	 inout PS2_CLK, PS2_DAT, // PS2时钟，PS2数据
+	 output L, // 左键
+	 output R, // 右键
+	 output M, // 中键
+	 output Xd, // 是否有X轴移动
+	 output Yd, // 是否有Y轴移动
+	 output Zd, // 是否有Z轴移动
+	 output Trig, // 事件触发器
+	 output [7:0]X, // X轴偏移
+	 output [7:0]Y, // Y轴偏移
+	 output Z // Z轴偏移
 );
     wire [1:0]EnU1;
     

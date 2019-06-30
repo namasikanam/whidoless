@@ -1,24 +1,30 @@
+// VGA显示高层驱动
+//
+//
+// 使用sram作为缓冲输出9位颜色图像
+//
+
 module vga
 (
-    input reset,
-	 output reg[20:0]vga_needed_sram_addr,
-	 output integer vga_current_3,
-	 output integer x,
-	 output integer y,
-	 input [2:0]r_in,
-	 input [2:0]g_in,
-	 input [2:0]b_in,
-	 output [2:0]r_out,
-	 output [2:0]g_out,
-	 output [2:0]b_out,
-    input clk25,
-	 output hs,
-	 output vs
+    input reset, // RESET
+	 output reg[20:0]vga_needed_sram_addr, // SRAM地址
+	 output integer vga_current_3, // 颜色通道选择
+	 output integer x, // x坐标
+	 output integer y, // y坐标
+	 input [2:0]r_in, // 红色通道输入
+	 input [2:0]g_in, // 绿色通道输入
+	 input [2:0]b_in, // 蓝色通道输入
+	 output [2:0]r_out, // 红色通道输出
+	 output [2:0]g_out, // 绿色通道输出
+	 output [2:0]b_out, // 蓝色通道输出
+     input clk25, // 时钟
+	 output hs, // 垂直扫描
+	 output vs // 水平扫描
 );
 
-	 wire [19:0]AddrU2; // [20:10]X ,[9:0]Y
+	 wire [19:0]AddrU2;
 	 
-	 vga_funcmod U2    // 640 * 480 @ 60Hz
+	 vga_funcmod U2
 	 (
 	   .CLOCK( clk25 ), 
 	   .RESET( reset ),
@@ -36,7 +42,7 @@ module vga
 	 wire [19:0]AddrU4;
 	 wire [8:0] VGAD;
 	 
-	 vga_ctrlmod U4  // 128 * 96 * 16bit, X0,Y0
+	 vga_ctrlmod U4
 	 (
 	     .CLOCK( clk25 ),
 		  .RESET( reset ),

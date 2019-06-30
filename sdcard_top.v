@@ -1,15 +1,22 @@
+// SPI模式SD卡读高层驱动
+// 
+//
+// 对底层驱动的读操作进行了封装，进行以块为单位的读取
+//
+// 如果需要写入SD卡，请直接使用底层驱动
+
 module sdcard_top
 (
-    input CLOCK_50,RESET,
-	 output SD_NCS, 
-	 output SD_CLK,
-	 input SD_DOUT,
-	 output SD_DI,
-	 input [9:0]img_id,
-	 input [9:0]block_id,
-	 input r, // 拉高表示开始读，done了之后需要手动拉低。
-	 output reg done, // 高电平表示已经读好了。
-	 output reg[4095:0]data
+     input CLOCK_50,RESET, // 输入时钟（最高50MHz），RESET
+	 output SD_NCS, // SD卡接口
+	 output SD_CLK, // SD卡接口
+	 input SD_DOUT, // SD卡接口
+	 output SD_DI, // SD卡接口
+	 input [9:0]img_id, // 区域偏移
+	 input [9:0]block_id, // 块偏移
+	 input r, // 置1时开始读，done置1后需要置为0
+	 output reg done, // 置1表示已读完
+	 output reg[4095:0]data // 输出数据
 );
 
     parameter SEC = 32'd24832;
@@ -27,7 +34,7 @@ module sdcard_top
 	 wire [7:0]sd_fsm;
 	 
 	 always @(*) begin
-	     addr = 32'd24832 + img_id * 32'd856 + block_id;
+	     addr = 32'd24832 + img_id * 32'd856 + block_id; // 地址偏移计算公式，可以根据需要调整
     end
 	 
 	 reg [9:0]count;

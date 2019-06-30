@@ -1,97 +1,35 @@
----------------------------------------------------------------------------
----------------------------------------------------------------------------
+-- SPI模式SD卡读写底层驱动
 --
---    This file is part of LJW2030, a VHDL implementation of the IBM
---    System/360 Model 30.
 --
---    LJW2030 is free software: you can redistribute it and/or modify
---    it under the terms of the GNU General Public License as published by
---    the Free Software Foundation, either version 3 of the License, or
---    (at your option) any later version.
---
---    LJW2030 is distributed in the hope that it will be useful,
---    but WITHOUT ANY WARRANTY; without even the implied warranty of
---    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
---    GNU General Public License for more details.
---
---    You should have received a copy of the GNU General Public License
---    along with LJW2030 .  If not, see <http://www.gnu.org/licenses/>.
---
----------------------------------------------------------------------------
---
---    File: sd_spi.vhd
---    Creation Date: 2013-02-08
---    Description:
---    Interface to SD/SDHC card via SPI
---
---    Revision History:
---    Revision 1.0 2013-05-03
---    Revision 1.01 2014-09-23 Correct wr_erase_count handling
---		Revision 1.02 2014-09-24 Fix error in read handshaking
---		Revision 1.03 2014-09-28 Improve write handshaking
---		Revision 1.04 2014-09-29 Streamline aborted read transfers
---
---    Initial Release
---
----------------------------------------------------------------------------
----------------------------------------------------------------------------
-
--- This SD Card interface was based on the one by Steven J Merrifield
--- http://stevenmerrifield.com/tools/sd.vhd or https://github.com/sjm126/vhdl
--- Rewritten for SD V2 and SDHC by Lawrence Wilkinson, Feb 2013
--- to add:
--- * Support for SD V2 and SDHC.
--- * Sector-based addressing only (512 byte blocks.)
--- * CRC computation and checking - CRC is enabled for SPI transfers
--- * Timeouts and status checks where appropriate
--- * Low-speed initialisation
---
--- The FSM is implemented as two processes with a large number of state variables.
--- In the interests of providing glitch-free outputs, the SD card outputs are
--- registered along with the state variables.
---
--- CalcStateVariables asynchronously calculates the updated state values, and the
--- outputs values, from the current state and asynchronous inputs.  The calculated
--- values have names prefixed with new_ .  The default value of the new_X variable
--- is generally X (i.e. the current value) to imply a register.  For state variable
--- that are updated rarely, there is a companion variable prefixed with set_ which
--- is used to gate the calculated value into the state variable.  The theory of this
--- is to make use of the ClockEnable input to the state registers, and when the set_X
--- variable is false then the calculated new_X value is irrelevant (typically 0) to
--- simplify the logic.
---
--- UpdateStateVariables synchronously updates the state and output variables from the
--- values provided by CalcStateVariables.
---
--- The state machine implements subroutines by setting the variable "return_state"
--- before transitioning to the start of the subroutine.
--- Two-level subroutines are handled by the "sr_return_state" variable which allows the top
--- level subroutine to call the SEND_RCV subroutine to transfer a single by to/from the card.
+-- 支持SDV1、SDV2和SDHC.
+-- 使用Sector地址进行块选取（每块512 byte)
+-- 支持CRC校验
+-- 支持SD卡版本查询、状态查询和错误码查询
+-- 初始化时自动降频
 --
 -- sd_busy:
--- Inactive when the card can accept a Read or Write command
--- Goes active for the duration of the command, input address is latched at this time
--- Goes inactive when Rd or Wr is dropped, or when command is complete, whichever is later
+-- 置0时可以进行读写
+-- 开始读写时置为1
+-- 读写结束后置为0
 --
 -- sd_error:
--- Goes active immediately when an error is detected
--- Resets when RD or WR is raised for the next command (except for 110 or 111 status)
+-- 出现错误后置位1
 -- 
 -- sd_error_code:
--- 000 No error (operation complete)
--- 001 SD Card R1 error (R1 bit 6-0)
--- 010 Read CRC error or Write Timeout error
--- 011 Data Response Token error (Token bit 3)
--- 100 Data Error Token error (Token bit 3-0)
--- 101 SD Card Write Protect switch
--- 110 Unusable SD card
--- 111 No SD card (no response from CMD0)
+-- 000 没有错误
+-- 001 SD卡R1错误
+-- 010 CRC校验失败或超时
+-- 011 回应错误
+-- 100 数据错误
+-- 101 SD卡写保护开启
+-- 110 SD卡不可用
+-- 111 没有插入SD卡
 --
 -- sd_type:
--- 00 No card
--- 01 SD V1
--- 10 SD V2
--- 11 SDHC
+-- 00 无SD卡
+-- 01 SDV1卡
+-- 10 SDV2卡
+-- 11 SDHC卡
 --
 
 
@@ -101,45 +39,45 @@ use ieee.numeric_std.all;
 
 entity sd_controller is
 generic (
-	clockRate : integer := 50000000;		-- Incoming clock is 50MHz (can change this to 2000 to test Write Timeout)
-	slowClockDivider : integer := 64;	-- Basic clock is 25MHz, slow clock for startup is 25/64 = 390kHz
-	R1_TIMEOUT : integer := 10;			-- Number of bytes to wait before giving up on receiving R1 response
-	WRITE_TIMEOUT : integer range 0 to 999 := 500		-- Number of ms to wait before giving up on write completing
+	clockRate : integer := 50000000;		-- 接入50MHz时钟
+	slowClockDivider : integer := 64;	-- 降频比例
+	R1_TIMEOUT : integer := 10;			-- R1超时时间
+	WRITE_TIMEOUT : integer range 0 to 999 := 500		-- 写超时时间
 	);
 port (
-	cs : out std_logic;				-- To SD card
-	mosi : out std_logic;			-- To SD card
-	miso : in std_logic;			-- From SD card
-	sclk : out std_logic;			-- To SD card
-	card_present : in std_logic;	-- From socket - can be fixed to '1' if no switch is present
-	card_write_prot : in std_logic;	-- From socket - can be fixed to '0' if no switch is present, or '1' to make a Read-Only interface
+	cs : out std_logic;				-- SD接口
+	mosi : out std_logic;			-- SD接口
+	miso : in std_logic;			-- SD接口
+	sclk : out std_logic;			-- SD接口
+	card_present : in std_logic;	-- 是否已插入SD卡（可以直接置为1）
+	card_write_prot : in std_logic;	-- 是否开启写保护
 
-	rd : in std_logic;				-- Trigger single block read
-	rd_multiple : in std_logic;		-- Trigger multiple block read
-	dout : out std_logic_vector(7 downto 0);	-- Data from SD card
-	dout_avail : out std_logic;		-- Set when dout is valid
-	dout_taken : in std_logic;		-- Acknowledgement for dout
+	rd : in std_logic;				-- 读触发器
+	rd_multiple : in std_logic;		-- 连续读触发器
+	dout : out std_logic_vector(7 downto 0);	-- 数据输出
+	dout_avail : out std_logic;		-- 输出数据可用标识
+	dout_taken : in std_logic;		-- 输出数据已读取标识
 	
-	wr : in std_logic;				-- Trigger single block write
-	wr_multiple : in std_logic;		-- Trigger multiple block write
-	din : in std_logic_vector(7 downto 0);	-- Data to SD card
-	din_valid : in std_logic;		-- Set when din is valid
-	din_taken : out std_logic;		-- Ackowledgement for din
+	wr : in std_logic;				-- 写触发器
+	wr_multiple : in std_logic;		-- 连续写触发器
+	din : in std_logic_vector(7 downto 0);	-- 数据输入
+	din_valid : in std_logic;		-- 输入数据可用标识
+	din_taken : out std_logic;		-- 输入数据已读取标识
 	
-	addr : in std_logic_vector(31 downto 0);	-- Block address
-	erase_count : in std_logic_vector(7 downto 0); -- For wr_multiple only
+	addr : in std_logic_vector(31 downto 0);	-- 块地址
+	erase_count : in std_logic_vector(7 downto 0); -- 仅供连续写使用，清空计数器
 
-	sd_error : out std_logic;		-- '1' if an error occurs, reset on next RD or WR
-	sd_busy : out std_logic;		-- '0' if a RD or WR can be accepted
-	sd_error_code : out std_logic_vector(2 downto 0); -- See above, 000=No error
+	sd_error : out std_logic;		-- 错误时置1，需要传入RST
+	sd_busy : out std_logic;		-- 忙时置1
+	sd_error_code : out std_logic_vector(2 downto 0); -- 错误码
 	
 	
-	reset : in std_logic;	-- System reset
-	clk : in std_logic;		-- twice the SPI clk (max 50MHz)
+	reset : in std_logic;	-- RST
+	clk : in std_logic;		-- CLK，不能高于50MHz
 	
-	-- Optional debug outputs
-	sd_type : out std_logic_vector(1 downto 0);	-- Card status (see above)
-	sd_fsm : out std_logic_vector(7 downto 0) := "11111111" -- FSM state (see block at end of file)
+	-- 调试用接口
+	sd_type : out std_logic_vector(1 downto 0);	-- SD卡类型
+	sd_fsm : out std_logic_vector(7 downto 0) := "11111111" -- SD卡状态
 );
 
 end sd_controller;

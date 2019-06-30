@@ -1,10 +1,18 @@
+// VGA显示控制驱动
+//
+// 修改相关参数可以调整刷新率和分辨率
+//
+// 关于刷新率和分辨率和对应参数的对应关系请参考网上资料
+// 如果显示出现偏移，请通过修改XOFF和YOFF进行微调
+//
+
 module vga_ctrlmod
 (
-    input CLOCK, RESET,
-	 output [8:0]VGAD,
-	 output [20:0]oAddr,
-	 input [8:0]iData,
-	 input [19:0]iAddr
+    input CLOCK, RESET, // 时钟和RESET
+	 output [8:0]VGAD, // 输出颜色
+	 output [20:0]oAddr, // 输出地址
+	 input [8:0]iData, // 输入颜色
+	 input [19:0]iAddr // 输入地址
 );
 	 parameter SA = 10'd96, SB = 10'd48, SC = 10'd640, SD = 10'd16, SE = 10'd800;
 	 parameter SO = 10'd2, SP = 10'd33, SQ = 10'd480, SR = 10'd10, SS = 10'd525;

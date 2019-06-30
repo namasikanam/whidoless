@@ -1,7 +1,12 @@
+// VGA显示功能驱动
+//
+// 关于刷新率和分辨率和对应参数的对应关系请参考网上资料
+//
+
 module vga_funcmod 
 (
-    input CLOCK, RESET,
-	 output VGA_HSYNC, VGA_VSYNC,
+    input CLOCK, RESET, //  时钟、RESET
+	 output VGA_HSYNC, VGA_VSYNC, // VGA同步接口
 	 output [19:0]oAddr  // [20:10]X ,[9:0]Y
 );
     parameter SA = 10'd96, SE = 10'd800;
