@@ -1,3 +1,5 @@
+-- 主控制程序
+
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.std_logic_unsigned.all;
@@ -6,25 +8,25 @@ use ieee.std_logic_arith.all;
 entity whidoless is
 	port(
 		clk: in std_logic; -- 100MHz时钟信号
-		reset: in std_logic;
+		reset: in std_logic; -- reset信号
 		
 		-- SRAM
 		ram_data: inout std_logic_vector(31 downto 0); -- 数据线
 		ram_addr: out std_logic_vector(19 downto 0); -- 地址线
-		ram_rw: out std_logic_vector(1 downto 0);
-		ram_cs: out std_logic;
+		ram_rw: out std_logic_vector(1 downto 0); -- 读写控制信号
+		ram_cs: out std_logic; -- 控制信号
 		
 		-- VGA
-		r_out, g_out, b_out: out std_logic_vector(2 downto 0);
-		hs, vs: out std_logic;
+		r_out, g_out, b_out: out std_logic_vector(2 downto 0); -- VGA输出信号
+		hs, vs: out std_logic; -- VGA控制信号
 		
 		-- PS2
-		mouse_reset: in std_logic;
-		PS2_CLK, PS2_DAT: inout std_logic;
+		mouse_reset: in std_logic; -- 鼠标重置信号
+		PS2_CLK, PS2_DAT: inout std_logic; -- 鼠标信号
 		
 		-- SD Card
-		SD_NCS, SD_CLK, SD_DI: out std_logic;
-		SD_DOUT: in std_logic
+		SD_NCS, SD_CLK, SD_DI: out std_logic; -- SD卡控制信号
+		SD_DOUT: in std_logic -- SD卡输出信号
 	);
 end entity;
 
@@ -32,7 +34,7 @@ architecture whidoless of whidoless is
 	constant W: integer:= 640;
 	constant H: integer:= 480;
 	constant R: integer:= 3; -- 涂鸦球的大小。
-	constant NUMBER_OF_IMG: integer:= 1024;
+	constant NUMBER_OF_IMG: integer:= 20;
 	constant NUMBER_OF_BLOCK: integer:= 856;
 	constant MAX_VALID_SD_SUBSCRIPT: integer:= 3213;
 	constant LENGTH_OF_SD_WORD: integer:= 27;
@@ -71,8 +73,8 @@ architecture whidoless of whidoless is
 			r_in, g_in, b_in: in std_logic_vector(2 downto 0);
 			r_out, g_out, b_out: out std_logic_vector(2 downto 0);
 			
-			clk25: in std_logic; -- 50MHz鏃堕挓杈撳叆
-			hs, vs: out std_logic -- 琛屽悓姝ャ€佸満鍚屾淇″彿
+			clk25: in std_logic;
+			hs, vs: out std_logic
 		);
 	end component;
 	signal enable: std_logic;
@@ -97,34 +99,34 @@ architecture whidoless of whidoless is
 	end component;
 	signal sd_r: std_logic; -- 拉高表示向sd卡请求读取数据。
 	signal sd_done: std_logic; -- 已经从sd卡里读出数据了
-	signal sd_data: std_logic_vector(4095 downto 0);
+	signal sd_data: std_logic_vector(4095 downto 0); -- 从sd卡读到的数据
 	
 	signal wanted_img_id: std_logic_vector(9 downto 0); -- 想读的img_id
-	signal block_id: std_logic_vector(9 downto 0);
+	signal block_id: std_logic_vector(9 downto 0); -- 想读的block_id
 	signal sd_data_subscript: integer range 0 to 4000; -- 把sd卡数据的什么位置写进SRAM呢？
-	signal current_sd_data: std_logic_vector(31 downto 0);
+	signal current_sd_data: std_logic_vector(31 downto 0); -- 当前从sd卡里写入SRAM中的数据。
 	signal sram_addr: std_logic_vector(19 downto 0); -- 把sd卡的数据写进SRAM的什么位置呢？
 	
 	signal sd_state: integer range 0 to 4; -- 读SD卡的状态机，其实也还没想好到底有几个状态。
 	signal sram_w: std_logic; -- 控制SRAM，'0'表示在咸鱼，'1'表示告知SRAM：你可以把数据从SD卡中读到SRAM里了
-	signal sram_done: std_logic; -- 模仿田哥的做法，感觉有个done信号还是蛮合理的。
+	signal sram_done: std_logic; -- done信号表示已经成功把sd卡中的数据写入SRAM中了
 	
 	-- 时序逻辑
-	signal state: std_logic_vector(3 downto 0);
-	signal mouse_w: std_logic;
+	signal state: std_logic_vector(3 downto 0); -- 状态机的状态
+	signal mouse_w: std_logic; -- 鼠标是否按住了，按住的话就表示需要涂鸦了
 	
-	signal vga_needed_sram_addr: std_logic_vector(19 downto 0);
-	signal vga_current_3: integer range 0 to 2;
+	signal vga_needed_sram_addr: std_logic_vector(19 downto 0); -- VGA需要读取的SRAM的地址
+	signal vga_current_3: integer range 0 to 2; -- 一次从SRAM中读3个VGA pixel需要的数据，这个表示现在VGA读到的是第几个pixel
 	signal vga_data: std_logic_vector(31 downto 0); -- r_in, g_in和b_in来自的地址
 	
-	signal paint_data0, paint_data1, paint_data2: std_logic_vector(8 downto 0);
-	signal write_flag0, write_flag1, write_flag2: std_logic;
+	signal paint_data0, paint_data1, paint_data2: std_logic_vector(8 downto 0); -- 涂鸦数据。
+	signal write_flag0, write_flag1, write_flag2: std_logic; -- 一次写入的3个VGA pixel是否位于涂鸦球中。
 	
 	-- 颜色
-	signal right_click: std_logic;
+	signal right_click: std_logic; -- 鼠标右键点击信号
 	type ENUM_COLOR is (Red, Green, Blue, Black, White);
-	signal color: ENUM_COLOR;
-	signal color_data: std_logic_vector(8 downto 0);
+	signal color: ENUM_COLOR; -- 当前涂鸦的颜色
+	signal color_data: std_logic_vector(8 downto 0); -- 当前涂鸦颜色对应的数据
 	
 	-- type type_canvas is array (255 downto 0) of std_logic_vector(255 downto 0);
 	-- signal canvas: type_canvas:= (others => (others => '0'));
@@ -186,23 +188,11 @@ begin
 					r_in <= vga_data(27 downto 25);
 					g_in <= vga_data(24 downto 22);
 					b_in <= vga_data(21 downto 21) & vga_data(19 downto 18);
---					r_in <= vga_data(17 downto 15);
---					g_in <= vga_data(14 downto 12);
---					b_in <= vga_data(11 downto 9);
---					r_in <= vga_data(8 downto 6);
---					g_in <= vga_data(5 downto 3);
---					b_in <= vga_data(2 downto 0);
 				when 1 =>
 					r_in <= vga_data(17 downto 15);
 					g_in <= vga_data(14 downto 12);
 					b_in <= vga_data(11 downto 9);
---					r_in <= vga_data(8 downto 6);
---					g_in <= vga_data(5 downto 3);
---					b_in <= vga_data(2 downto 0);
 				when 0 =>
---					r_in <= vga_data(17 downto 15);
---					g_in <= vga_data(14 downto 12);
---					b_in <= vga_data(11 downto 9);
 					r_in <= vga_data(8 downto 6);
 					g_in <= vga_data(5 downto 3);
 					b_in <= vga_data(2 downto 0);
@@ -321,7 +311,6 @@ begin
 	end process;
 	
 	current_sd_data <= "0000" & sd_data(sd_data_subscript + 26 downto sd_data_subscript + 20) & "0" & sd_data(sd_data_subscript + 19 downto sd_data_subscript);-- 跳过第20位。
-	-- current_sd_data <= (others => '0');
 	
 	-- 这是一个总的时序状态机。
 	process(reset, clk)
@@ -370,11 +359,6 @@ begin
 					if sram_w = '1' then
 						ram_addr <= sram_addr;
 						ram_data <= current_sd_data;
---						if vga_x mod 24 = 0 then
---							ram_data <= "0000" & "1110000" & "0" & "00" & "000111000" & "000000111";
---						else
---							ram_data <= (others => '0');
---						end if;
 					elsif lrm(0) = '1' then
 						if vga_x2 < W and vga_y2 < H and (vga_x2 - mouse_x) * (vga_x2 - mouse_x) + (vga_y2 - mouse_y) * (vga_y2 - mouse_y) <= R * R then
 							paint_data2 <= color_data;
